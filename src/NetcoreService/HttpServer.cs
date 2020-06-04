@@ -11,7 +11,9 @@ namespace NetcoreService.HttpServer
         public static CommonCache GetInstance()
         {
             if (_instance == null)
+            {
                 _instance = new CommonCache();
+            }
             return _instance;
         }
 
@@ -38,51 +40,85 @@ namespace NetcoreService.HttpServer
     {
         public HttpCacheSession(NetCoreServer.HttpServer server) : base(server) {}
 
-        protected override void OnReceivedRequest(HttpRequest request)
+        protected override void OnReceivedRequest(HttpRequest Request)
         {
             // Show HTTP request content
-            Console.WriteLine(request);
+            Console.WriteLine(Request);
 
-            // Process HTTP request methods
-            if (request.Method == "HEAD")
-                SendResponseAsync(Response.MakeHeadResponse());
-            else if (request.Method == "GET")
+            // Handle user api service
+            if (SendResponseAsync(ServiceHandler.ServiceHandler.GetInstance().RoutineHandler(Request, Response)) != true)
             {
-                // Get the cache value
-                string cache;
-                if (CommonCache.GetInstance().GetCache(request.Url, out cache))
+                // Process HTTP request methods
+                switch (Request.Method)
                 {
-                    // Response with the cache value
-                    SendResponseAsync(Response.MakeGetResponse(cache));
+                    case "HEAD":
+                        {
+                            SendResponseAsync(Response.MakeHeadResponse());
+                        }
+                        break;
+                    case "GET":
+                        {
+                            // Get the cache value
+                            string cache;
+                            if (CommonCache.GetInstance().GetCache(Request.Url, out cache))
+                            {
+                                // Response with the cache value
+                                SendResponseAsync(Response.MakeGetResponse(cache));
+                            }
+                            else
+                            {
+                                SendResponseAsync(Response.MakeErrorResponse("Required cache value was not found for the key: " + Request.Url));
+                            }
+                        }
+                        break;
+                    case "POST":
+                        {
+                            // Set the cache value
+                            CommonCache.GetInstance().SetCache(Request.Url, Request.Body);
+                            // Response with the cache value
+                            SendResponseAsync(Response.MakeOkResponse());
+                        }
+                        break;
+                    case "PUT":
+                        {
+                            // Set the cache value
+                            CommonCache.GetInstance().SetCache(Request.Url, Request.Body);
+                            // Response with the cache value
+                            SendResponseAsync(Response.MakeOkResponse());
+                        }
+                        break;
+                    case "DELETE":
+                        {
+                            // Delete the cache value
+                            string cache;
+                            if (CommonCache.GetInstance().DeleteCache(Request.Url, out cache))
+                            {
+                                // Response with the cache value
+                                SendResponseAsync(Response.MakeGetResponse(cache));
+                            }
+                            else
+                            {
+                                SendResponseAsync(Response.MakeErrorResponse("Deleted cache value was not found for the key: " + Request.Url));
+                            }
+                        }
+                        break;
+                    case "OPTIONS":
+                        {
+                            SendResponseAsync(Response.MakeOptionsResponse());
+                        }
+                        break;
+                    case "TRACE":
+                        {
+                            SendResponseAsync(Response.MakeTraceResponse(Request.Cache.Data));
+                        }
+                        break;
+                    default:
+                        {
+                            SendResponseAsync(Response.MakeErrorResponse("Unsupported HTTP method: " + Request.Method));
+                        }
+                        break;
                 }
-                else
-                    SendResponseAsync(Response.MakeErrorResponse("Required cache value was not found for the key: " + request.Url));
             }
-            else if ((request.Method == "POST") || (request.Method == "PUT"))
-            {
-                // Set the cache value
-                CommonCache.GetInstance().SetCache(request.Url, request.Body);
-                // Response with the cache value
-                SendResponseAsync(Response.MakeOkResponse());
-            }
-            else if (request.Method == "DELETE")
-            {
-                // Delete the cache value
-                string cache;
-                if (CommonCache.GetInstance().DeleteCache(request.Url, out cache))
-                {
-                    // Response with the cache value
-                    SendResponseAsync(Response.MakeGetResponse(cache));
-                }
-                else
-                    SendResponseAsync(Response.MakeErrorResponse("Deleted cache value was not found for the key: " + request.Url));
-            }
-            else if (request.Method == "OPTIONS")
-                SendResponseAsync(Response.MakeOptionsResponse());
-            else if (request.Method == "TRACE")
-                SendResponseAsync(Response.MakeTraceResponse(request.Cache.Data));
-            else
-                SendResponseAsync(Response.MakeErrorResponse("Unsupported HTTP method: " + request.Method));
         }
 
         protected override void OnReceivedRequestError(HttpRequest request, string error)

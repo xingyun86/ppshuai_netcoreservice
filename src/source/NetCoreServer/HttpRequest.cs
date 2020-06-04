@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace NetCoreServer
 {
@@ -80,6 +82,15 @@ namespace NetCoreServer
 
             return _cookies[i];
         }
+        public bool GetQuery(string key, out string value)
+        {
+            return _queries.TryGetValue(key, out value);
+        }
+        public ConcurrentDictionary<string, string> Queries()
+        {
+            return _queries;
+        }
+
         /// <summary>
         /// Get the HTTP request body as string
         /// </summary>
@@ -133,6 +144,7 @@ namespace NetCoreServer
             _protocol = "";
             _headers.Clear();
             _cookies.Clear();
+            _queries.Clear();
             _bodyIndex = 0;
             _bodySize = 0;
             _bodyLength = 0;
@@ -478,6 +490,8 @@ namespace NetCoreServer
         private List<Tuple<string, string>> _headers = new List<Tuple<string, string>>();
         // HTTP request cookies
         private List<Tuple<string, string>> _cookies = new List<Tuple<string, string>>();
+        // HTTP request queries
+        private readonly ConcurrentDictionary<string, string> _queries = new ConcurrentDictionary<string, string>();
         // HTTP request body
         private int _bodyIndex;
         private int _bodySize;
@@ -547,6 +561,18 @@ namespace NetCoreServer
                     if (index >= (int)_cache.Size)
                         return false;
                     _url = _cache.ExtractString(urlIndex, urlSize);
+
+                    // Read query parameters
+                    Regex regex = new Regex(@"(^|&)?(\w+)=([^&]+)(&|$)?", RegexOptions.Compiled);
+                    MatchCollection mc = regex.Matches(_url);
+                    if (mc.Count > 0)
+                    {
+                        _url = _url.Substring(0, _url.IndexOf('?'));
+                        foreach (Match m in mc)
+                        {
+                            _queries.TryAdd(m.Result("$2"), m.Result("$3"));
+                        }
+                    }
 
                     // Parse protocol version
                     int protocolIndex = index;
